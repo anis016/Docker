@@ -1,0 +1,20 @@
+---
+- name: Check current docker-compose version
+  command: docker-compose --version
+  register: docker__compose_current_version
+  changed_when: false
+  failed_when: false
+
+- name: Delete existing docker-compose version
+  file:
+    path: "{{ docker__compose_path }}"
+    state: absent
+  when: >
+    docker__compose_current_version.stdout is defined and
+    docker__compose_version not in docker__compose_current_version.stdout
+
+- name: Install Docker Compose
+  get_url:
+    url: "{{ docker__compose_url }}"
+    dest: "{{ docker__compose_path }}"
+    mode: 0755

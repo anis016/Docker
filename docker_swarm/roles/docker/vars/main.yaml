@@ -1,0 +1,11 @@
+---
+docker__old_packages:
+  - "docker"
+  - "docker-common"
+  - "docker-engine"
+
+docker__dependencies:
+  - "apt-transport-https"
+  - "ca-certificates"
+  - "software-properties-common"
+  - "curl"

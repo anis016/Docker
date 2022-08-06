@@ -1,0 +1,7 @@
+---
+- name: Add docker users -- {{ docker__users | join(",") }} to the docker group
+  user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  with_items: "{{ docker__users }}"

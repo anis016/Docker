@@ -1,0 +1,10 @@
+---
+- name: Configure hosts file
+  hosts: all
+  roles:
+    - hosts-config
+
+- name: Install and configure 'docker'
+  hosts: all
+  roles:
+    - docker

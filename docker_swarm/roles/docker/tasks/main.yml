@@ -1,0 +1,23 @@
+---
+- name: Include task for docker setup
+  include_tasks: docker.yml
+
+- name: Ensure Docker is started and enabled at boot
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Ensure handlers are notified now to avoid firewall conflicts
+  meta: flush_handlers
+
+- name: Include task for docker-compose setup
+  include_tasks: docker-compose.yml
+  when: docker__install_compose | bool
+
+- name: Include task for docker-users setup
+  include_tasks: docker-users.yml
+  when: docker__users | length > 0
+
+- name: Correct the Docker daemon permission
+  shell: sudo chmod 666 /var/run/docker.sock

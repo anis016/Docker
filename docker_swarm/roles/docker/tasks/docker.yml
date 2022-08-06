@@ -1,0 +1,44 @@
+---
+- name: Ensure packages '{{ docker__old_packages | join(", ") }}' are removed 
+  apt:
+    name: "{{ docker__old_packages }}"
+    state: "absent"
+    only_upgrade: no
+    update_cache: yes
+    install_recommends: yes
+    autoclean: yes
+    autoremove: yes
+
+- name: Ensure apt key '{{ docker__apt_gpg_key }}' is present 
+  apt_key:
+    url: "{{ docker__apt_gpg_key }}"
+    state: "present"
+    validate_certs: yes
+
+- name: Ensure repository '{{ docker__apt_repository }}' is present 
+  apt_repository:
+    repo: "{{ docker__apt_repository }}"
+    mode: "0644"
+    state: "present"
+    update_cache: yes
+    validate_certs: yes
+
+- name: Ensure packages '{{ docker__dependencies | join(", ") }}' are present 
+  apt:
+    name: "{{ docker__dependencies }}"
+    state: "present"
+    only_upgrade: no
+    update_cache: yes
+    install_recommends: yes
+    autoclean: yes
+    autoremove: yes
+
+- name: Ensure packages '{{ docker__package | join(", ") }}' are present 
+  apt:
+    name: "{{ docker__package }}"
+    state: "present"
+    only_upgrade: no
+    update_cache: yes
+    install_recommends: yes
+    autoclean: yes
+    autoremove: yes
