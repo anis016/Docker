@@ -33,7 +33,7 @@
     autoclean: yes
     autoremove: yes
 
-- name: Ensure packages '{{ docker__package | join(", ") }}' are present 
+- name: Ensure package '{{ docker__package | join(", ") }}' is present 
   apt:
     name: "{{ docker__package }}"
     state: "present"

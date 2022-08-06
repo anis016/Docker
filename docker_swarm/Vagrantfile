@@ -25,7 +25,8 @@ Vagrant.configure("2") do |config|
     (1..MASTER_NODE_COUNT).each do |i|
         config.vm.define "master#{i}" do |master|
             master.vm.hostname = "master#{i}.example.com"
-            master.vm.network "public_network", ip: "192.168.56.#{90 + i}", bridge: "#{default_network_interface}"
+            master.vm.network "private_network", ip: "192.168.56.#{90 + i}"
+            master.vm.network "public_network", bridge: "#{default_network_interface}"
 
             master.vm.provider "virtualbox" do |vbox|
                 vbox.name = "master#{i}"
@@ -43,7 +44,8 @@ Vagrant.configure("2") do |config|
     (1..WORKER_NODE_COUNT).each do |i|
         config.vm.define "worker#{i}" do |worker|
             worker.vm.hostname = "worker#{i}.example.com"
-            worker.vm.network "public_network", ip: "192.168.56.#{40 + i}", bridge: "#{default_network_interface}"
+            worker.vm.network "private_network", ip: "192.168.56.#{40 + i}"
+            worker.vm.network "public_network", bridge: "#{default_network_interface}"
 
             worker.vm.provider "virtualbox" do |vbox|
                 vbox.name = "worker#{i}"

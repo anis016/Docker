@@ -38,11 +38,13 @@ echo "[masters]" >>"${HOST_FILE_NAME}"
 for i in $(seq 1 $masters); do
     master_name="master${i}"
 
-    # _ip_addr=$(vagrant ssh -c "ip addr" "${master_name}" 2>/dev/null)
-    # master_ip=$(echo -n "${_ip_addr}" | grep -E -o "(192.168.56.[0-9]{1,3})/[0-9]{1,2}" | awk -F '/' '{print $1}')
+    _ip_addr=$(vagrant ssh -c "ip addr" "${master_name}" 2>/dev/null)
+    master_ip=$(echo -n "${_ip_addr}" | grep -E -o "(192.168.56.[0-9]{1,3})/[0-9]{1,2}" | awk -F '/' '{print $1}')
 
-    _ip_addr=$(vagrant ssh -c "hostname -I | tr -d '\n'" "${master_name}" 2>/dev/null)
-    master_ip=$(echo -n "${_ip_addr}" | awk '{print $2}')
+    # _ip_addr=$(vagrant ssh -c "hostname -I | tr -d '\n'" "${master_name}" 2>/dev/null)
+    # master_ip=$(echo -n "${_ip_addr}" | awk '{print $2}')
+    # master_ip="192.168.56.$((90 + i))"
+
     master_hostname=$(vagrant ssh -c "hostname -f | tr -d '\n'" "${master_name}" 2>/dev/null)
     master_port=$(vagrant ssh-config "${master_name}" 2>/dev/null | grep 'Port' | awk '{print $NF}')
 
@@ -60,8 +62,13 @@ echo "[workers]" >>"${HOST_FILE_NAME}"
 for i in $(seq 1 $workers); do
     worker_name="worker${i}"
 
-    _ip_addr=$(vagrant ssh -c "hostname -I | tr -d '\n'" "${worker_name}" 2>/dev/null)
-    worker_ip=$(echo -n "${_ip_addr}" | awk '{print $2}')
+    _ip_addr=$(vagrant ssh -c "ip addr" "${worker_name}" 2>/dev/null)
+    worker_ip=$(echo -n "${_ip_addr}" | grep -E -o "(192.168.56.[0-9]{1,3})/[0-9]{1,2}" | awk -F '/' '{print $1}')
+
+    # _ip_addr=$(vagrant ssh -c "hostname -I | tr -d '\n'" "${worker_name}" 2>/dev/null)
+    # worker_ip=$(echo -n "${_ip_addr}" | awk '{print $2}')
+    # worker_ip="192.168.56.$((40 + i))"
+
     worker_hostname=$(vagrant ssh -c "hostname -f | tr -d '\n'" "${worker_name}" 2>/dev/null)
     worker_port=$(vagrant ssh-config "${worker_name}" 2>/dev/null | grep 'Port' | awk '{print $NF}')
 

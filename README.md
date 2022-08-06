@@ -1243,6 +1243,10 @@ In a swarm, the atomic unit of the scheduling is the `service`. This is a new ob
 
 When a container is created by a service, it's typically referred to as a `task` or a `replica`.
 
+More read:
+
+* https://docs.docker.com/engine/swarm/
+
 ### Docker Swarm Commands
 
 Running Docker in Swarm mode
@@ -1319,7 +1323,135 @@ docker swarm join --token [TOKEN] [MANAGER NODE PRIVATE IP]:2377
 
 ### Working with Services
 
+Setup a Docker swarm with 1 Master node and 2 Worker nodes
 
+```sh
+cd docker_swarm
+vagrant up
+bash generate-host-file.sh -m 1 -w 2
+
+# login to the master1 node
+vagrant ssh master1
+vagrant@master1:~$ sudo docker swarm init --advertise-addr 192.168.56.91
+...
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-1utt46ae4j6sqegedkuav1nvnaqeghssgr8x8n311266aihsoa-52wo9zkqgxqskjnfwmkl95gm9 192.168.56.91:2377
+...
+...
+
+# login to the worker nodes and join the worker nodes
+vagrant ssh worker1
+vagrant@worker1:~$ docker swarm join --token SWMTKN-1-1utt46ae4j6sqegedkuav1nvnaqeghssgr8x8n311266aihsoa-52wo9zkqgxqskjnfwmkl95gm9 192.168.56.91:2377
+
+vagrant ssh worker2
+vagrant@worker2:~$ docker swarm join --token SWMTKN-1-1utt46ae4j6sqegedkuav1nvnaqeghssgr8x8n311266aihsoa-52wo9zkqgxqskjnfwmkl95gm9 192.168.56.91:2377
+
+# from the master1 node check the swarm status
+vagrant@master1:~$ docker node ls
+ID                            HOSTNAME   STATUS    AVAILABILITY   MANAGER STATUS   ENGINE VERSION
+jjz1rdaoo495ldxxwhb5ns7r3 *   master1    Ready     Active         Leader           20.10.17
+duqp2ptw6iw2e8049evi4lg80     worker1    Ready     Active                          20.10.17
+mo5v59afvy2kn6sql90clgej1     worker2    Ready     Active                          20.10.17
+```
+
+An `application that is deployed` to a Docker host running in `swarm mode` is deployed as a `service`. A service is the image for a microservice within the context of some larger application. Examples of services might include an HTTP server, a database, or any other type of executable program that we wish to run in a distributed environment. When a service is created, it is accepted by the swarm manager and the `service definition represents the desired state`. Based on the `number of replicas`, the swarm will schedule replica `tasks`, and `each task invokes a single container`, and these containers run in isolation.
+
+Read more:
+
+* https://docs.docker.com/engine/swarm/key-concepts/#services-and-tasks
+* https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/
+
+![Docker Swarm Services](./images/docker-swarm-services.png?raw=true "Docker Swarm Services")
+<p align = "center"> Docker Swarm Services </p>
+
+From the diagram above, we have a single service - `nginx` with 3 replicas. Each of the instances of the `nginx` service is also a `task` in the swarm. The swarm manager schedules the 3 replica tasks, and each of these tasks will be scheduled onto an available node within the swarm. In the swarm mode model, `each task` invokes exactly `one container`.
+
+> When the container is live, the scheduler recognizes the task is in a running state. If, for whatever reason, the container fails a health check or is terminated, the task is also terminated. If the minimum number of replicas is not met, then a new task will be scheduled and created.
+
+Creating a service is similar to creating a container, but rather than executing docker container run, we will be using the command `docker service create`.
+
+```sh
+docker service create -d --name [NAME] -p [HOST PORT]:[CONTAINER PORT] --replicas [NUMBER OF REPLICAS] [IMAGE] [CMD]
+(eg) docker service create -d --name nginx_service -p 8080:80 --replicas 3 nginx:latest
+```
+
+> Note: `-d` flag is used to run the service in the background, `--replicas` sets the number of replica tasks
+
+List services
+
+```sh
+docker service ls
+(eg) docker service ls
+ID             NAME            MODE         REPLICAS   IMAGE          PORTS
+m799kz2gf424   nginx_service   replicated   3/3        nginx:latest   *:8080->80/tcp
+```
+
+List all tasks of a service
+
+```sh
+docker service ps [SERVICE NAME]
+(eg) docker service ps nginx_service
+ID             NAME              IMAGE          NODE      DESIRED STATE   CURRENT STATE            ERROR     PORTS
+ctrljs9c3l2z   nginx_service.1   nginx:latest   worker1   Running         Running 28 seconds ago             
+5dig05hg1v7b   nginx_service.2   nginx:latest   worker2   Running         Running 25 seconds ago             
+8xb4ozw7yd9h   nginx_service.3   nginx:latest   master1   Running         Running 27 seconds ago
+```
+
+Inspect service
+
+```sh
+docker service inspect [SERVICE NAME]
+```
+
+Using the `NetworkID` (from `docker service inspect` command) we can search for the network the containers will be attached to
+
+```sh
+docker service inspect nginx_service | grep "NetworkID"
+"NetworkID": "5fxnwlyhgx617734qhtwlcg9w",
+
+docker network ls --no-trunc | grep "p01rgyj8869ss2oytujpqltyt"
+```
+
+Getting the logs of the service
+
+```sh
+docker service logs [SERVICE NAME]
+```
+
+Scaling a service up or down
+
+```sh
+docker service scale [SERVICE NAME]=[REPLICAS]
+
+(eg) docker service scale nginx_service=4
+nginx_service scaled to 4
+overall progress: 4 out of 4 tasks 
+1/4: running   [==================================================>] 
+2/4: running   [==================================================>] 
+3/4: running   [==================================================>] 
+4/4: running   [==================================================>] 
+verify: Service converged 
+
+(eg) docker service ps nginx_service 
+ID             NAME              IMAGE          NODE      DESIRED STATE   CURRENT STATE                ERROR     PORTS
+ctrljs9c3l2z   nginx_service.1   nginx:latest   worker1   Running         Running about a minute ago             
+5dig05hg1v7b   nginx_service.2   nginx:latest   worker2   Running         Running about a minute ago             
+8xb4ozw7yd9h   nginx_service.3   nginx:latest   master1   Running         Running about a minute ago             
+uiwyda3nri58   nginx_service.4   nginx:latest   master1   Running         Running 9 seconds ago
+```
+
+Updating a certain aspects of the service. Use the `--help` command to check all the options
+
+```sh
+docker service update [OPTIONS] [SERVICE NAME]
+```
+
+Since the containers are running on different nodes the service is being load balanced, so we will not able to access it using localhost. However, we can curl it using either the public or private IP of the nodes in the cluster.
+
+```sh
+curl 192.168.56.91:8080
+```
 
 ## Docker Commands
 
