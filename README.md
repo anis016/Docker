@@ -1453,6 +1453,124 @@ Since the containers are running on different nodes the service is being load ba
 curl 192.168.56.91:8080
 ```
 
+### Working with Network
+
+Docker swarm uses `overlay` network. The overlay network connects `multiple Docker daemons` together to create a flat virtual network across hosts where we can establish a communication
+
+* between a swarm service and a standalone container, or
+* between two standalone containers on different Docker daemons
+
+For example, the diagram below shows the overlay network that allows us to establish connections between different hosts that are hidden from each other. There there are two hosts and each one runs `docker`, the overlay network The overlay network sits on top of the host-specific network and each container connected to this overlay network will be able to communicate with other containers.
+
+> By default, all service management traffic are encrypted. Manager nodes in the swarm rotate the keys used to encrypt the data every 12 hours.
+
+![Docker Swarm Overlay Example](./images/docker-swarm-overlay-example.png?raw=true "Docker Swarm Overlay Example")
+<p align = "center"> Docker Swarm Overlay Example </p>
+
+Docker handles the routing of the packets to the correct Docker host and to the correct container. This allows us to use the public IP of our swarm manager to access the service and this routes the traffic to the correct Docker host and to the correct container. Overlay networks are best when we need containers running on different Docker hosts to communicate, or when multiple applications work together using the swarm services. We can add a service to multiple networks as shown below.
+
+![Multiple services connected to network](./images/docker-swarm-overlay-multi-service.png?raw=true "Multiple services connected to network")
+<p align = "center"> Multiple services connected to network </p>
+
+For the services to communicate in the swarm, we can use the following commands to attach the services to the network
+
+```sh
+docker network create -d overlay test1
+docker network create -d overlay test2
+docker service create --name my-network-test --network test1 --network test2 [IMAGE]:[TAG]
+```
+
+A Docker swarm generates two different kinds of traffic:
+
+1. `Control and management plane traffic`: This includes swarm management messages, such as requests to join or leave the swarm. This traffic is always encrypted.
+2. `Application data plane traffic`: This includes container traffic and traffic to and from external clients.
+
+The following three network concepts are important to swarm services:
+
+* `Overlay networks` creates a `distributed network` across multiple Docker nodes. We can attach a service to one or more existing overlay networks, to enable service-to-service communication.
+* The `ingress network` is a special overlay network that `handles the control and data traffic related to swarm services`. The `ingress network` is created automatically when we initialize or join a swarm. If we don't supply a user-defined network, it's going to use ingress by default.
+* The `docker_gwbridge` is a bridge network that `connects individual Docker daemons to other daemons participating in the swarm`.
+
+List the available networks
+
+```sh
+vagrant@master1:~$ docker network ls
+NETWORK ID     NAME              DRIVER    SCOPE
+b663606e10b0   bridge            bridge    local
+b865705d6fa7   docker_gwbridge   bridge    local **
+1c4b481a948c   host              host      local
+5fxnwlyhgx61   ingress           overlay   swarm **
+c760565189d7   none              null      local
+```
+
+List the available network without truncation
+
+```sh
+docker network ls --no-trunc
+NETWORK ID                                                         NAME                DRIVER    SCOPE
+b663606e10b0b969d5f420933fe96164ce53437affd37a4cbf5ae0cb74893acf   bridge              bridge    local
+b865705d6fa7cbbf9ea553cbd401960695757c43a505ee6a0b3c3dd2b3dc5445   docker_gwbridge     bridge    local
+1c4b481a948c8f876e4b5ce0c4f3ef76ebd6d03c41d838b17e855044092bdfba   host                host      local
+5fxnwlyhgx617734qhtwlcg9w                                          ingress             overlay   swarm
+c760565189d79b6841c4c6b53c13959126a5ad81e602faabec8df2c59a87a6e3   none                null      local
+```
+
+Creating a new `overlay network` is like creating a bridge network.
+
+```sh
+docker network create -d overlay [NETWORK NAME]
+(eg) docker network create -d overlay my_overlay
+```
+
+To create an encrypted network use the below command
+
+```sh
+docker network create -d overlay --opt encrypted [NETWORK NAME]
+(eg) docker network create -d overlay --opt encrypted encrypted_overlay
+
+docker network inspect encrypted_overlay
+...
+...
+"Options": {
+    "com.docker.network.driver.overlay.vxlanid_list": "4098",
+    "encrypted": "" ## normal overlay network won't have this option
+},
+```
+
+Create new service using the user-defined overlay network
+
+```sh
+docker service create -d --name [NAME] --network [NETWORK NAME] -p [HOST PORT]:[CONTAINER PORT] --replicas [NUMBER OF REPLICAS] [IMAGE] [CMD]
+(eg) docker service create -d --name nginx_service_overlay --network my_overlay -p 8080:80 --replicas 2 nginx:latest
+```
+
+To add a pre-existing service and add to a network
+
+```sh
+docker service update --network-add [NETWORK NAME] [SERVICE NAME]
+(eg) docker service update --network-add my_overlay nginx_service
+```
+
+To remove a service from a network
+
+```sh
+docker service update --network-rm [NETWORK NAME] [SERVICE NAME]
+(eg) docker service update --network-rm my_overlay nginx_service
+```
+
+Deleting a new `overlay network` is like deleting a bridge network.
+
+```sh
+docker network rm [NETWORK NAME]
+(eg) docker network rm encrypted_overlay
+```
+
+Read more:
+
+* https://docs.docker.com/network/overlay/
+* https://docs.docker.com/engine/swarm/networking/
+* https://docs.docker.com/network/network-tutorial-overlay/
+
 ## Docker Commands
 
 ### Manage images
