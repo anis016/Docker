@@ -1113,7 +1113,7 @@ Connect to the portainer using `localhost:8081`.
 
 ```sh
 username: admin
-password: mea13579
+password: password123
 ```
 
 ![Portainer](./images/portainer.png?raw=true "Portainer")
@@ -1570,7 +1570,66 @@ Read more:
 * https://docs.docker.com/network/overlay/
 * https://docs.docker.com/engine/swarm/networking/
 * https://docs.docker.com/network/network-tutorial-overlay/
+* https://nigelpoulton.com/demystifying-docker-overlay-networking/
 
+### Working with Volumes
+
+When it comes to using volumes in swarm mode, we need to use a `volume plugin`, like REX-Ray, because the native driver for volumes is local. This means, if we create a volume, it will be created locally to where that command was executed. For example, if we create a service and it has multiple replica tasks, and those tasks are running on different nodes. A volume will be created on each worker node. so, if we have worker 1 and 2, and we have 2 replica tasks, each are running on those individual nodes, then we will have 2 separate volumes created, which presents a problem. So, if we change the data on one of the volumes, it is not going to be updated on the other. So the data will not be persistent across those volumes, and that's the reason why we need to use a driver. Typically, this is handled through some form of block storage device.
+
+Adding plugins to the docker
+
+```sh
+docker plugin install [PLUGIN] [PLUGIN OPTIONS]
+(eg) docker plugin install store/splunk/docker-logging-plugin:2.0.0 --alias splunk-logging-plugin
+```
+
+Listing plugins
+
+```sh
+docker plugin ls
+```
+
+Remove a plugin
+
+```sh
+docker plugin disable [PLUGIN ID]
+docker plugin rm [PLUGIN ID]
+```
+
+Create `rexray/dobs` plugin:
+
+```sh
+docker plugin install rexray/dobs DOBS_REGION=[DO REGION] DOBS_TOKEN=[DIGITAL OCEAN TOKEN] DOBS_CONVERTUNDERSCORES=true
+```
+
+Create a `local` volume using a driver. Since we created the volume with `local`, this volume will not be present on other docker host. This volume will only be present in the host where the volume is created 
+
+```sh
+docker volume create -d [DRIVER] [NAME]
+(eg) docker create -d local portainer_data # this volume is created local to the manger host
+```
+
+Create a service using a driver
+
+```sh
+docker service create -d --name [NAME] --mount type=[TYPE],src=[SOURCE],dst=[DESTINATION] -p [HOST PORT]:[CONTAINER PORT] --replicas [REPLICAS] [IMAGE] [CMD]
+
+# run this command on the manager host since volume is created there, and since we used the `constraint` on the manager node hence any replicas created will be also created on the manger node
+(eg) docker service create \
+        --name portainer \
+        --publish 8000:9000 \
+        --constraint 'node.role == manager' \
+        --mount type=volume,src=portainer_data,dst=/data \
+        --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+        --replicas 2\
+        portainer/portainer \
+        -H unix:///var/run/docker.sock
+```
+
+Read more:
+
+* https://rexray.readthedocs.io/en/stable/user-guide/schedulers/docker/plug-ins/
+* 
 ## Docker Commands
 
 ### Manage images
