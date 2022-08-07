@@ -1606,7 +1606,7 @@ Create a `local` volume using a driver. Since we created the volume with `local`
 
 ```sh
 docker volume create -d [DRIVER] [NAME]
-(eg) docker create -d local portainer_data # this volume is created local to the manger host
+(eg) docker volume create -d local portainer_data # this volume is created local to the manger host
 ```
 
 Create a service using a driver
@@ -1621,15 +1621,170 @@ docker service create -d --name [NAME] --mount type=[TYPE],src=[SOURCE],dst=[DES
         --constraint 'node.role == manager' \
         --mount type=volume,src=portainer_data,dst=/data \
         --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
-        --replicas 2\
         portainer/portainer \
         -H unix:///var/run/docker.sock
 ```
 
+Access `portainer` using `http://192.168.56.91:8000/`
+
 Read more:
 
 * https://rexray.readthedocs.io/en/stable/user-guide/schedulers/docker/plug-ins/
-* 
+
+### Deploying Stacks
+
+Stacks let us deploy a complete application to our swarm environment, and we do this using the Docker Compose file. 
+
+Create `prometheus` applicaton **configuration** file
+
+```sh
+vagrant@master1:~/prometheus$ vi prometheus.yml
+
+---
+global:
+  scrape_interval: 15s
+  scrape_timeout: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    scrape_interval: 5s
+    static_configs:
+    - targets:
+      - prometheus_main:9090
+
+  - job_name: nodes
+    scrape_interval: 5s
+    static_configs:
+    - targets:
+      - 192.168.56.91:9100
+      - 192.168.56.41:9100
+      - 192.168.56.42:9100
+
+  - job_name: cadvisor
+    scrape_interval: 5s
+    static_configs:
+    - targets:
+      - 192.168.56.91:8081
+      - 192.168.56.41:8081
+      - 192.168.56.42:8081
+```
+
+Create `prometheus` **docker-compose** file
+
+```sh
+vagrant@master1:~/prometheus$ vi docker-compose.yml
+
+---
+version: '3'
+services:
+  main:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - 8080:9090
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus/data
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - data:/prometheus/data
+    depends_on:
+      - cadvisor
+      - node-exporter
+  cadvisor:
+    image: google/cadvisor:latest
+    container_name: cadvisor
+    deploy:
+      mode: global
+    restart: unless-stopped
+    ports:
+      - 8081:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    deploy:
+      mode: global
+    restart: unless-stopped
+    ports:
+      - 9100:9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - 8082:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      s- grafana_plugins:/var/lib/grafana/plugins
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    depends_on:
+      - prometheus
+      - cadvisor
+      - node-exporter
+
+volumes:
+  data:
+  grafana_data:
+  grafana_plugins:
+```
+
+Deploy the stack in the swarm.
+
+```sh
+docker stack deploy [STACK NAME]
+(eg) vagrant@master1:~/prometheus$ docker stack deploy --compose-file docker-compose.yml prometheus
+```
+
+> Note that we will get volume permissions issue because `prometheus` image uses the user `nobody`. Hence, create the user and the group and then correct the permission
+
+```sh
+vagrant@master1:~/prometheus$ sudo useradd nobody
+vagrant@master1:~/prometheus$ sudo groupadd nobody
+vagrant@master1:~/prometheus$ sudo chown nobody:nobody prometheus.yml
+vagrant@master1:~/prometheus$ sudo chown nobody:nobody -R /var/lib/docker/volumes/prometheus_data
+```
+
+List the stack
+
+```sh
+docker stack ls
+```
+
+Check the service
+
+```sh
+docker service ls
+```
+
+List the tasks
+
+```sh
+docker service ps prometheus_main
+```
+
+Remove the stack
+
+```sh
+docker stack rm prometheus
+```
+
+Access `portainer` using `http://192.168.56.91:8080/`
+
 ## Docker Commands
 
 ### Manage images
