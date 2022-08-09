@@ -1783,7 +1783,54 @@ Remove the stack
 docker stack rm prometheus
 ```
 
-Access `portainer` using `http://192.168.56.91:8080/`
+Access `prometheus` using `http://192.168.56.91:8080/`
+
+## Docker Security
+
+Docker containers are very similar to LXC containers. They have some very similar security features. Whenever we create a container by executing `docker container run ...` command, Docker creates a set of `namespaces` as well as `control groups (cgroups)` for that container.
+
+![Docker Security](./images/docker-security.png?raw=true "Docker Security")
+<p align = "center"> Docker Security </p>
+
+* `Namespaces` provides **isolation** for the **container**. This means `processes running within that container cannot see or interact with processes running on the host operating system or in another container`. This also gives each container its own network stack. That is, each container does not have privileged access to sockets or interfaces on other containers. This also means that containers can interact with one another using their network interfaces. This is just like any other computer on a network.
+  > When a Docker container is created, it's going to get its own namespaces for the **process ID (PID)**, **network (net)**, **filesystem mount (mount)**, **inter-process communication (IPC)**, **user**, and **UTS**. This `collection of namespaces` is what we call a container. The namespace are briefly discussed below.
+  >  * `Process ID (pid)` namespace isolates the process free of each container. It prevents the container from seeing or accessing the process tree of other containers or the host that it's running on.
+  > * `Network (net)` namespace provides each container with its own isolated network stack. This includes things such as the network interface, IP addresses, port ranges, and route tables.
+  > * `Filesystem/mount (mount)` namespace gives every container its own unique isolated file system. This prevents the container from accessing mount namespaces of the Linux host or other containers.
+  > * `Inter-process communication (IPC)` namespace is used for sharing memory access within a container and also isolates it from other containers.
+  > * `User (user)` namespace allows us to go and map a user inside of a container to a different user on the host. A good example of this is mapping the root user of a container to a non-root user on the host.
+  > * `UTS (uts)` namespace provides each container with its own unique hostname.
+* `Control groups (cgroups)` are responsible for accounting and limiting resources on a container. It is also responsible for making sure that each container gets its fair share of resources. This includes CPU, memory, and disk IO. Cgroups are also responsible for making sure that a container can't exhaust all the resources on a Docker host, therefore bringing the system down.
+  > By default, containers don't have any resource constraints. This means they can consume as many resources as allowed by the kernel scheduler. One of the problems that we face when running containers is that we typically don't want to run them as a root because root is pretty powerful and it can be very, very dangerous. However, if we run it using a non-root user, it can become pretty useless. And in order to solve this problem, this is where capabilities come in. The root account is made up of a long list of capabilities. Docker works with these capabilities so the container can run as root, but strips out some of these capabilities that are not needed. Also, if a capability has been removed, Docker will prevent the container from adding a back in.
+
+Docker works with 2 of the major mandatory access control systems: 
+
+* `AppArmor`: AppArmor, or Application Armor, is a Linux security module that is responsible for protecting the operating system and its applications from security threats.
+* `SELinux`: Security-enhanced Linux, or SELinux, is a Linux kernel security module that provides a mechanism for supporting access control security policies.
+
+The last of the Linux technologies is `secure computing mode`, also known as `seccomp`. Seccomp is a Linux kernel future that allows us to go into `restrict actions available within a container`. Every container is given a default seccomp profile. This profile can be overwritten during container creation.
+
+> Docker security scanning is currently available with private repositories on Docker Hub or the Docker trusted registry on-premises solution. This solution helps identify code vulnerabilities within our images. It does this by performing binary-level scans of the Docker image, and then checks it against a database of known vulnerabilities. `Docker Content Trust (DTC)` allows us to verify the integrity and the publisher of an image. This is how we know that an image coming from Nginx is actually from the Nginx. This also allows developers to sign their images before pushing them to Docker Hub or to a trusted registry.
+
+`Docker secrets` allows us to store sensitive data such as passwords and API keys.
+
+The easiest way of adding an additional layer of security is by having Docker run in swarm mode. This gives us the following features:
+
+1. Cryptographic node IDs
+2. Mutual authentication via TLS
+3. Secure join tokens for both worker and management nodes
+4. CA with automatic certificate rotation
+5. Encrypted cluster stores
+6. Encrypted networking
+
+High-level workflow of how secrets work.
+
+1. Secrets are only available to us in swarm mode, and this is because of the encrypted cluster store. When we create a secret, it is posted to the swarm.
+2. The secret is encrypted and gets stored in the encrypted cluster store, and this runs on all the managers.
+3. We can then create the service that is going to be using the secret and have that secret attached to it.
+4. The secret is encrypted in-flight when it's delivered to the replica task.
+5. The secret is then mounted into the container of the service as an unencrypted file. It's to be found in `/run/secrets`. This is a `in-memory tmpfs`. This means that each secret is going to be mounted into the container using its own `tmpfs` file system. For example, let's say we have a secret called, **my-secret**. It's going to be mounted in a container under **/run/secrets/mysecret**.
+6. When the replica task is complete, the in-memory file system is torn down and then the secret is flushed from the node.
 
 ## Docker Commands
 
