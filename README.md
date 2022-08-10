@@ -572,8 +572,8 @@ CMD ./bin/www
 Build the `Dockerfile` as follows
 
 ```sh
-docker image build -t anis016/weather-app:1.0 .
-# or, docker image build -t anis016/weather-app:1.0 -f /path/Dockerfile
+docker image build --tag anis016/weather-app:1.0 .
+# or, docker image build --tag anis016/weather-app:1.0 -f /path/Dockerfile
 ```
 
 Check that the image is created
@@ -1808,7 +1808,7 @@ Docker works with 2 of the major mandatory access control systems:
 * `AppArmor`: AppArmor, or Application Armor, is a Linux security module that is responsible for protecting the operating system and its applications from security threats.
 * `SELinux`: Security-enhanced Linux, or SELinux, is a Linux kernel security module that provides a mechanism for supporting access control security policies.
 
-The last of the Linux technologies is `secure computing mode`, also known as `seccomp`. Seccomp is a Linux kernel future that allows us to go into `restrict actions available within a container`. Every container is given a default seccomp profile. This profile can be overwritten during container creation.
+The last of the Linux technologies is `secure computing mode`, also known as `seccomp`. Seccomp is a Linux kernel future that allows us to go into `restrict actions available within a container`. Every container is given a default `seccomp` profile. This profile can be overwritten during container creation.
 
 > Docker security scanning is currently available with private repositories on Docker Hub or the Docker trusted registry on-premises solution. This solution helps identify code vulnerabilities within our images. It does this by performing binary-level scans of the Docker image, and then checks it against a database of known vulnerabilities. `Docker Content Trust (DTC)` allows us to verify the integrity and the publisher of an image. This is how we know that an image coming from Nginx is actually from the Nginx. This also allows developers to sign their images before pushing them to Docker Hub or to a trusted registry.
 
@@ -1831,6 +1831,159 @@ High-level workflow of how secrets work.
 4. The secret is encrypted in-flight when it's delivered to the replica task.
 5. The secret is then mounted into the container of the service as an unencrypted file. It's to be found in `/run/secrets`. This is a `in-memory tmpfs`. This means that each secret is going to be mounted into the container using its own `tmpfs` file system. For example, let's say we have a secret called, **my-secret**. It's going to be mounted in a container under **/run/secrets/mysecret**.
 6. When the replica task is complete, the in-memory file system is torn down and then the secret is flushed from the node.
+
+More read:
+
+* https://docs.docker.com/engine/security/
+* https://docs.docker.com/engine/security/seccomp/
+
+### Working with Docker Security
+
+#### Seccomp
+
+Adding a custom `seccomp` profile
+
+```sh
+docker container run --security-opt seccomp=[PROFILE] [IMAGE] [CMD]
+```
+
+Testing `seccomp`. Since we have a default `seccomp` profile, even though we are `root` we don't permssion to many things, for example, mounting `/dev/sda1` into `/tmp` as show below
+
+```sh
+docker container run --rm -it alpine sh
+/ # whoami 
+root
+/ # mount /dev/sda1 /tmp/
+mount: permission denied (are you root?)
+/ # 
+```
+
+Rather than using the default profile we will create our own customized profile
+
+```sh
+cd docker_security
+
+# create a new directory
+mkdir -p seccomp/profiles/chmod
+wget https://raw.githubusercontent.com/moby/moby/master/profiles/seccomp/default.json
+
+vi default.json
+# remove chmod, fchmod, and fchmodat. This will remove the ability to do chmod in a container
+
+# run the container with custom seccomp
+docker container run --rm -it --security-opt seccomp=./seccomp/profiles/chmod/default.json alpine sh
+/ # whoami 
+root
+/ # chmod +r home/
+chmod: home/: Operation not permitted
+/ # chmod +x home/
+chmod: home/: Operation not permitted
+```
+
+#### Capabilities
+
+Adding Capabilities
+
+```sh
+docker container run --cap-add=[CAPABILITY] [IMAGE] [CMD]
+```
+
+Dropping Capabilities
+
+```sh
+docker container run --cap-drop=[CAPABILITY] [IMAGE] [CMD]
+```
+
+Test the `mknod` (`mknod` is the command used to create device files) Capabilities
+
+```sh
+docker container run --rm -it alpine sh
+/ # mknod /dev/random2 c 1 8
+/ # ls -l /dev/random2 
+crw-r--r--    1 root     root        1,   8 Aug 10 23:19 /dev/random2
+```
+
+Drop the `mknod` Capabilities and retest
+
+```sh
+docker container run --rm -it --cap-drop=mknod alpine sh
+/ # mknod /dev/random2 c 1 8
+mknod: /dev/random2: Operation not permitted
+```
+
+Read more:
+
+* https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities
+
+#### Control Groups
+
+Limiting the amount of resources (CPU and Memory) a container can consume. By default, a container has no resource constraints. This means the container can use as much resources as the host kernel scheduler allows.
+
+```sh
+docker container run -it --cpus=[VALUE] --memory=[VALUE][SIZE] --memory-swap [VALUE][SIZE] [IMAGE] [CMD]
+```
+
+* `--cpus`: limits the amount of CPU access the container has
+* `--memory`: limits on the amount of memory that the container can consume
+* `--memory-swap`: limits the amount of swap space that the container has access to
+
+Limit the CPU and Memory of a container
+
+```sh
+mkdir weather-app
+cd weather-app && git clone https://github.com/linuxacademy/content-weather-app.git src
+```
+
+Create the Dockerfile
+
+```Dockerfile
+FROM node
+LABEL version="1.0"
+RUN mkdir -p /var/node
+ADD src/ /var/node/
+WORKDIR /var/node
+RUN npm install
+EXPOSE 3000
+CMD ./bin/www
+```
+
+Create the image
+
+```sh
+docker image build --tag weather-app:latest .
+docker container run -d --name resource-limits --cpus=".5" --memory=512M --memory-swap=1G weather-app:latest
+docker container inspect resource-limits | grep Memory | head -n 1
+            "Memory": 536870912,
+docker container inspect resource-limits | grep Cpus | head -n 1
+            "NanoCpus": 500000000,
+```
+
+Read more:
+
+* https://docs.docker.com/config/containers/resource_constraints
+* https://docs.docker.com/engine/reference/run/#runtime-constraints-on-resources
+
+#### Docker Bench Security
+
+Running Docker Bench Security:
+
+```sh
+docker container run --rm -it --network host \
+    --pid host \
+    --userns host \
+    --cap-add audit_control \
+    -e DOCKER_CONTENT_TRUST=$DOCKER_CONTENT_TRUST \
+    -v /var/lib:/var/lib \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /usr/lib/systemd:/usr/lib/systemd \
+    -v /etc:/etc \
+    --label docker_bench_security \
+    docker/docker-bench-security
+```
+
+Read more:
+
+* https://github.com/docker/docker-bench-security
 
 ## Docker Commands
 
