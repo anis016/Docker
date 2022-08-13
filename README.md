@@ -2045,6 +2045,182 @@ Below describes the stesp of signing an image.
 > systemctl docker restart
 > ```
 
+### Working with Docker Secrets
+
+Docker Secrets is used to protect sensitive data, such as passwords and API Keys. There are 2 ways we can create secrets.
+
+* We can STDIN the content and then pipe it into `docker secret` command, or
+* We can use a file and use this file to create the secret
+
+Create a secret using STDIN (for example, using `openssl`)
+
+```sh
+STDIN | docker secret create [SECRET NAME] -
+
+mkdir secrets && cd secrets
+openssl rand -base64 20 | docker secret create my_secret_data -
+```
+
+Create a secret using a file
+
+```sh
+docker secret create [SECRET NAME] [FILE]
+
+openssl rand -base64 20 > secret.txt
+docker secret create my_secret_data2 secret.txt
+```
+
+List the secrets
+
+```sh
+docker secret ls
+```
+
+Using a secret. In order to use secrets, we need to make sure that our Docker hosts are running in the `swarm` mode. This means we will be creating a service rather than just a container.
+
+```sh
+docker service create --name [SERVICE NAME] --secret [SECRET NAME] [IMAGE NAME]
+(eg) docker service create --name redis --secret my_secret_data redis:alpine
+```
+
+List the running tasks for the `redis` service by executing the `docker service ps` command
+
+```sh
+docker service ps redis
+
+ID             NAME      IMAGE          NODE      DESIRED STATE   CURRENT STATE            ERROR     PORTS
+0cimlrdo9si7   redis.1   redis:alpine   worker2   Running         Running 48 seconds ago
+```
+
+Now, we can `cat` the contents of our secret by logging into the swarm node that the service was created on. 
+
+```sh
+# log into the correct node, for this case it is worker2
+vagrant ssh worker2
+
+# $(docker ps --filter name=redis -q) gives the ID for the container that's attached to the service and then cat /run/secrets/my_secret_data, which will return the contents of our secret.
+docker container exec $(docker ps --filter name=redis -q) cat /run/secrets/my_secret_data
+```
+
+Inspecting a secret
+
+```sh
+docker secret inspect [SECRET NAME]
+```
+
+Deleting a secret
+
+```sh
+docker secret rm [SECRET NAME]
+```
+
+#### Create a WordPress blog with MySQL database
+
+Because WordPress is going to be accessed by the MySQL database, we need to create some passwords, which is going to be the root password for the MySQL database, as well as the WordPress user password.
+
+Use `openssl` to randomly generate a password and output it into a file called `db_password.txt` and `db_root_password.txt`
+
+```sh
+mkdir wordpress && cd wordpress
+mkdir secrets && cd secrets
+openssl rand -base64 20 > db_password.txt
+openssl rand -base64 20 > db_root_password.txt
+```
+
+Create a `docker-compose.yml` file.
+
+```sh
+cd wordpress
+vi docker-compose.yml
+
+---
+version: '3.1'
+
+services:
+   db:
+     image: mysql:5.7
+     volumes:
+       - db_data:/var/lib/mysql
+     networks:
+       mysql_internal:
+         aliases: ["db"]
+     environment:
+       MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+       MYSQL_DATABASE: wordpress
+       MYSQL_USER: wordpress
+       MYSQL_PASSWORD_FILE: /run/secrets/db_password
+     secrets:
+       - db_root_password
+       - db_password
+
+   wordpress:
+     depends_on:
+       - db
+     image: wordpress:latest
+     networks:
+       mysql_internal:
+         aliases: ["wordpress"]
+       wordpress_public:
+     ports:
+       - "8001:80"
+     environment:
+       WORDPRESS_DB_HOST: db:3306
+       WORDPRESS_DB_USER: wordpress
+       WORDPRESS_DB_PASSWORD_FILE: /run/secrets/db_password
+     secrets:
+       - db_password
+
+secrets:
+   db_password:
+     file: secrets/db_password.txt
+   db_root_password:
+     file: secrets/db_root_password.txt
+
+volumes:
+    db_data:
+
+networks:
+  mysql_internal:
+    driver: "overlay"
+    internal: true
+  wordpress_public:
+    driver: "overlay"
+```
+
+> Note: Because secrets are mounted in memory, we need to supply the path, `/run/secrets`, and then the name of the secret. So if the secret is called `db_root_password`, the path is going to be `/run/secret/db_root_password`.
+
+Deploy the stack
+
+```sh
+docker stack deploy --compose-file docker-compose.yml wordpress
+```
+
+List the secrets
+
+```sh
+docker secret ls
+```
+
+List the stacks
+
+```sh
+docker stack ls
+```
+
+List the services
+
+```sh
+docker service ls
+```
+
+Access the `wordpress` site using `http://192.168.56.91:8001/` where `192.168.56.91` is the public IP of the Manager.
+
+## What's next?
+
+* Kubernetes Quick Start
+* Kubernetes Essentials
+* Monitoring Kubernetes with Prometheus
+
 ## Docker Commands
 
 ### Manage images
