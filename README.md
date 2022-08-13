@@ -28,7 +28,7 @@ Docker architecture:
 * The docker client (`docker`) is what we use to interact with the docker daemon (`dockerd`) through the REST API. The client sends these command to `dockerd`. From the CLI we use `docker` as a command for executing the commands. For example, when we use the command `docker run ...` it sends the command to the daemon to run an image.
 * Docker registry is the place where we `store the images`. A docker registry is similar to a Github repository. In the docker registry we store images and in Github repository we store codes. By default Docker uses the Docker hub (public registry where we can save our own images as well as down other images created by other people or companies). We can also setup Docker to use the private registry as well, in this case we need to configure the Docker to communicate with the private registry. We interact with the docker registry by using `docker push` or `docker pull` command.
 
-> Basically, `Docker registry` is a service that is used to store the docker images. Docker registry could be hosted by a third party, as public or private registry, f.e. Docker Hub, Quay, etc. On the other hand, `Docker repository` is a collection of different docker images with same name, that have different tags. Tag is alphanumeric identifier of the image within a repository.
+> The difference between the `Docker registry` and the `Docker repository` is that the `Docker registry` is a service that is used to store the docker images. Docker registry could be hosted by a third party, as public or private registry, f.e. Docker Hub, Quay, etc. On the other hand, `Docker repository` is a collection of different docker images with same name, that have different tags. Tag is alphanumeric identifier of the image within a repository.
 
 ![Docker Architecture](./images/docker-architecture.png?raw=true "Docker Architecture")
 <p align = "center"> Docker Architecture </p>
@@ -1947,7 +1947,7 @@ EXPOSE 3000
 CMD ./bin/www
 ```
 
-Create the image
+Create the image and run the container
 
 ```sh
 docker image build --tag weather-app:latest .
@@ -1984,6 +1984,66 @@ docker container run --rm -it --network host \
 Read more:
 
 * https://github.com/docker/docker-bench-security
+
+
+### Docker Content Trust
+
+Docker Content Trust makes it easy to verify the integrity and the publisher of an image. Now, whether we use Docker Content Trust really depends on the security policies of the company. Most large corporations don't lets us just to use random packages on the internet. They need to be verified in some manner and this is where signing images comes in. For example, if we need to use an Nginx image, we want to make sure that the image we are using is actually coming from the Nginx and not just from a random untrusted place. So when Nginx goes and creates a new image, they sign it and then push it up to Docker Hub, and this is how we know we can trust it.
+
+Below describes the stesp of signing an image.
+
+* First create a new image, for example, sign-in to Docker Hub, pull the image, and create a new image from an earlier image
+  ```sh
+  docker image pull anis016/catnip:latest
+  docker image tag anis016/catnip:latest anis016/catnip-dct:latest
+  ```
+* Next, we need to create a key that we can use to sign things with
+  * We can generate a new key, or
+    ```sh
+    docker trust key generate [USER NAME]
+
+    # This command allows us to manage trust on Docker images
+    (eg) docker trust key generate anis016  
+    ```
+  * We can import a key
+    ```sh
+    docker trust key load [PEM FILE] --name [USER NAME]
+    ```
+* Then we need to add a signer to our repository. This is done by executing `docker trust signer` and the signer subcommand manages `entities` who can sign Docker images. We can either add or remove them.
+  * Add a new signer
+    ```sh
+    docker trust signer add --key [PEM FILE] [USER NAME] [REPOSITORY NAME]
+    (eg) docker trust signer add --key /home/vagrant/anis016.pub anis016 anis016/catnip-dct:latest
+    ```
+  * Remove a signer
+    ```sh
+    docker trust signer remove [USER NAME] [REPOSITORY NAME]
+    ```
+* Next, we are going to sign the repository by executing `docker trust sign` with the `Docker Hub username/image:tag`.
+  ```sh
+  docker trust sign [USER NAME]/[IMAGE NAME]:[TAG]
+  (eg) docker trust sign anis016/catnip-dct:latest
+  ```
+* Next, we are going to enable docker content trust (DCT). This is only going to temporarily enable it so if we execute `export DOCKER_CONTENT_TRUST=1` this will turn it on. Likewise, we can execute `export DOCKER_CONTENT_TRUST=0` to turn it off.
+  > Note that, after enabling the DCT if we try and pull an image that has not been signed, it is going to reject it.
+* Finally, we are going to push the signed image. This is going to sign and push the image to the Docker registry.
+  ```sh
+  docker image push anis016/catnip-dct:latest
+  ```
+
+> To enforce DCT permanently, we need to do the following. This file allows us to do is to modify some of the settings of the Docker. In the `swarm` mode we need to do this in all the docker servers.
+> 
+> ```sh
+> vi /etc/docker/daemon.json
+> 
+> {
+>   "content-trust": {
+>     "mode": "enforced"
+>   }
+> }
+> 
+> systemctl docker restart
+> ```
 
 ## Docker Commands
 

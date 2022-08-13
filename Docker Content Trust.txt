@@ -1,0 +1,151 @@
+Welcome back.
+I'm Travis with Linux Academy.
+In this lesson we're going to be talking about
+Docker Content Trust.
+Docker Content Trust makes it easy to go and
+verify the integrity and the publisher of an image.
+Now, whether you use Docker Content Trust
+really depends on the security policies of your company.
+Most large corporations don't let you just use
+random packages on the internet.
+They need to be verified in some manner.
+So this is where signing images comes in.
+If you need to go use an Nginx image,
+you want to make sure that the image you're using
+is actually coming from Nginx,
+and not just some random guy on the internet.
+So when Nginx goes and creates a new image,
+they sign it and then push it up to Docker Hub,
+and this is how we know we can trust it.
+So now I'm going to walk you through the process
+of going and signing an image.
+We're going to start by going and creating a new image.
+Execute docker image tag,
+use your Docker Hub username /weather-app,
+and use the latest tag.
+When you're creating a new image,
+again, use your Docker Hub user account,
+/ and call it dct,
+and we're going to be tagging it to latest.
+Now we need to create a key
+that we can use to sign things with.
+There's 2 ways we can do this.
+We can generate a new key,
+which is what we'll be doing,
+or you can import one in.
+So over here, you can see the instructions
+for importing a key, just execute docker trust key load,
+supply the PEM file, and then use the --name flag
+and supply the name.
+However, we're going to be going and generating a new key.
+We're being introduced to a new management command
+and that is the trust command.
+This command allows us to go and
+manage trust on Docker images.
+So execute docker trust key generate,
+and then supply your username.
+Mine's going to be tthomsen.
+You'll be prompted to enter a new passphrase,
+and then confirm it.
+In the cloud_user directory, I have a new key
+which is tthomsen.pub.
+Now we need to add a signer to our repository.
+The way we do this is by executing docker trust signer
+and the signer subcommand manages entities
+who can sign Docker images.
+We can add or remove them.
+In this case, we're going to be adding a new signer.
+So we're going to be executing
+docker trust signer add,
+we use the --key flag, and then supply the public key,
+mine is called tthomsen.pub,
+and then the name, which is tthomsen.
+The last thing we supply is going to be the repository.
+So we're going to be going and signing
+rivethead42/dct.
+And again, you'll be using your Docker Hub username.
+Now we're going to be asked to enter our passphrase
+and everything is good.
+Optionally, I can remove a signer
+by executing docker trust signer remove,
+supply the name and repository
+that I want the signer removed from.
+Okay, for the sake of transparency
+I want to let you know, I accidentally broke my repository.
+This is what happens when you revoke a signer
+when you're in the middle of signing the repository.
+Don't do that.
+I had to create a new one
+which is going to be dct1.
+For you guys, just keep using dct.
+Now we're going to sign the repository
+by executing docker trust sign,
+your Docker Hub username, /dct and then latest.
+Enter your passphrase.
+And now it's been signed.
+Now we're going to go an enable docker content trust.
+This is only going to temporarily enable it
+so if you execute export DOCKER_CONTENT
+_TRUST, and set it equal to 1,
+this will turn it on.
+Likewise, you can set it to 0,
+which will turn it off.
+In a moment, I'll show you how to go
+and permanently enable it for your Docker host.
+Now after executing this command,
+if I try and pull an image that has not been signed,
+it's going to reject it,
+and I'll demonstrate that in a moment as well.
+And finally, we're going to push our image
+up to Docker Hub.
+You may need to execute docker login first,
+just be aware of that.
+After you've logged in to Docker Hub,
+execute docker image push,
+your Docker Hub username /dct:latest.
+We'll be prompted again to enter our passphrase.
+And everything has been signed and pushed.
+To prove that we've enabled Docker Content Trust,
+what I'm going to do is I'm going to remove an image.
+I'm going to execute docker image rm.
+I'm going to supply it my Docker Hub username,
+/weather-app,
+and making sure I'm removing the latest image.
+So this is going to delete it locally,
+and now when I try and pull it,
+it's going to be rejected.
+Now if I execute docker image pull,
+riverhead42/weather-app,
+we get this error message that says
+remote trust data does not exist for the docker registry
+and that it's not going to pull the image.
+So we know we are now using only signed images.
+So we're going to do the exact same thing for nginx:latest.
+We're going to delete it.
+Alright, it's gone.
+And now we're going to re-pull the image,
+and it's going to pull successfully
+because this is a signed image.
+Now we can have content trust permanently enforced
+by going and creating /etc/docker/daemon.json.
+What this file allows you to do
+is modify some of the daemon settings of Docker.
+So I can add the following snippet of json.
+I can set content-trust, mode: enforced
+and this is going to make sure that
+Docker Content Trust is indeed being enforced.
+We do have a couple of other modes we can set.
+We have passive, as well as disabled.
+At this point, I can go save and quit
+and restart the Docker daemon
+and Docker Content Trust will now be enforced.
+Okay, because I didn't this as root, I can't save it.
+That's fine,
+I don't want to implement Docker Content Trust anyway.
+I just want to make sure that you guys are aware of how
+to do this for your production environments.
+So I'm just going to quit.
+And because we're running in swarm mode,
+this will need to be done to all of our Docker servers.
+That's all I have for this lesson.
+Go ahead and mark it complete.
