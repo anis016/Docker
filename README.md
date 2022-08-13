@@ -2600,4 +2600,5 @@ docker commit -c 'CMD["redis-server"]' [CONTAINER ID] [manual image generation a
 
 ### Resources
 
+* The notes are from the course `Docker - Deep Dive` by `Travis Thomsen`
 * Most of the commands were taken from [Docker for Java Developers training](https://www.virtualpairprogrammers.com/training-courses/Docker-for-Java-Developers-training.html)
