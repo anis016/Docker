@@ -2057,8 +2057,7 @@ Create a secret using STDIN (for example, using `openssl`)
 ```sh
 STDIN | docker secret create [SECRET NAME] -
 
-mkdir secrets && cd secrets
-openssl rand -base64 20 | docker secret create my_secret_data -
+(eg) openssl rand -base64 20 | docker secret create my_secret_data -
 ```
 
 Create a secret using a file
@@ -2066,6 +2065,7 @@ Create a secret using a file
 ```sh
 docker secret create [SECRET NAME] [FILE]
 
+mkdir secrets && cd secrets
 openssl rand -base64 20 > secret.txt
 docker secret create my_secret_data2 secret.txt
 ```
